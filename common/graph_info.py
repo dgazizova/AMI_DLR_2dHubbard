@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import os
 # Load environment variables from .env file
 load_dotenv()
-sys.path.append(str(pathlib.Path(__file__).parent.joinpath(os.getenv('CPLUS_INCLUDE_PATH')).resolve()))
+sys.path.append(str(pathlib.Path(__file__).parent.joinpath(os.getenv('PYTAMI_PATH')).resolve()))
 import pytami
 
 def nested_defaultdict():
