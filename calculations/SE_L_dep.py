@@ -38,5 +38,5 @@ except FileNotFoundError:
 for i in range(len(kx)):
     df.loc[len(df)] = [kx[i], ky[i], iw[i], L, np.real(SE_res[i]), np.imag(SE_res[i])]
 print(df)
-df.to_csv(f"SE_ord{ord}_L_dep.csv", index=False)
+# df.to_csv(f"SE_ord{ord}_L_dep.csv", index=False)
 

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from common import pytami_func as so
+from common import pytami_func as ami
 from common import graph_info as gr
 from pydlr import dlr
 
@@ -205,7 +205,7 @@ class SE_AMI:
         for i_ext in range(k_mesh.shape[0]):
             for i in range(self.N_GF):
                 energy_list[i, :] = get_energy_dispersion_AMI(k_mesh[i_ext, 0, :, i], k_mesh[i_ext, 1, :, i])
-            sigma[i_ext, :] = so.get_sigma_torchami_from_dispersion(
+            sigma[i_ext, :] = ami.get_sigma_torchami_from_dispersion(
                 iw, self.beta, energy_list, self.R0, self.prefactor,
                 False, 0, self.device) / (self.L ** (2 * self.order))
         return sigma
@@ -223,7 +223,7 @@ class SE_AMI:
         """
         sigma = np.zeros((k_mesh.shape[0], iw.shape[0]), dtype=complex)
         for i_ext in range(k_mesh.shape[0]):
-            sigma[i_ext, :] = so.get_sigma_torchami_from_poles(
+            sigma[i_ext, :] = ami.get_sigma_torchami_from_poles(
                 iw, self.beta, k_mesh[i_ext], poles_weights_kx_ky, poles_locs, self.R0, self.prefactor,
                 False, 0, self.device) / (self.L ** (2 * self.order))
         return sigma
