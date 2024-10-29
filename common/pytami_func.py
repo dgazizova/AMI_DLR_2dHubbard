@@ -20,7 +20,7 @@ def torch_prefactor_tensors_kx_ky_poles(k_mesh: np.array, poles_weights: pd.Data
     prefactors = []
     poles_weights_kx_ky = [torch.tensor(
         poles_weights[np.isclose(poles_weights['kx'], k_mesh[0, j]) &
-                      np.isclose(poles_weights['ky'], k_mesh[1, j]) & (poles_weights['indx'] == j)]['polls'].values[0], device=usedevice)
+                      np.isclose(poles_weights['ky'], k_mesh[1, j]) & (poles_weights['indx'] == j)]['poles'].values[0], device=usedevice)
         for j in range(k_mesh.shape[1])]
     prefactors.append(torch.prod(torch.cartesian_prod(*poles_weights_kx_ky), dim=1))
     prefactors_tensor = torch.cat(prefactors, dim=0)

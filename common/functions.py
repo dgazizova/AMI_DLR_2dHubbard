@@ -5,6 +5,14 @@ from common import pytami_func as so
 from common import graph_info as gr
 from pydlr import dlr
 
+def transpose_lits(l):
+    return list(map(list, zip(*l)))
+
+
+def first_order_truncation(G, SE, U):
+    return G + G ** 2 * SE * U ** 2
+
+
 def dyson(G, SE):
     """
     Calculation bold GF in Dyson equation

@@ -16,7 +16,7 @@ ord = 2  # order of the graph
 beta = 5  # inverse temperature
 E_max = 5.  # range for DLR
 n = 2*ord - 1  # number of GF in the graph
-eps = 1e-14  # eps parameter for DLR
+eps = 1e-6  # eps parameter for DLR
 n_iw = 5  # number of matsubara freq to calculate
 
 # DLR representation
@@ -34,7 +34,7 @@ kx, ky = np.ravel(kx), np.ravel(ky)
 G0_list = []
 for i, iw_q in enumerate(iw_q_list):
     G0_list.append(get_G0(iw_q, kx, ky))
-G0_list = list(map(list, zip(*G0_list)))
+G0_list = transpose_lits(G0_list)
 # get the DLR poles weights for every kx, ky point
 poles_w = [d.get_poles_weights_list(G0_list[i]) for i in range(len(kx))]
 poles_w = [item for sublist in poles_w for item in sublist]
@@ -58,7 +58,6 @@ k_mesh = SE.get_k_mesh(kexx, kexy)
 res_AMI = SE.get_SE_AMI_from_dispersion(iw, k_mesh)
 print(res_AMI)
 start_time = time.time()
-print(len(d.w_list[0]))
 res = SE.get_SE_AMI_from_poles(iw, k_mesh, poles_weights_kx_ky, poles_locs=d.w_list)
 print(res)
 end_time = time.time()
