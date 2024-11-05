@@ -44,6 +44,16 @@ def get_energy_dispersion_AMI(kx, ky, t=1):
     """
     return 2 * t * (np.cos(kx) + np.cos(ky))
 
+def get_energy_dispersion(kx, ky, t=1):
+    """
+    Energy dispersion for 2d Hubbard model
+    :param kx: momentum in x direction, can be either float or numpy array
+    :param ky: momentum in y direction, can be either float or numpy array
+    :param t: hopping parameter, generally = 1
+    :return: negative energy dispersion [-e(kx, ky)]
+    """
+    return -2 * t * (np.cos(kx) + np.cos(ky))
+
 def get_GF_from_DLR_iw(iw, g_k, w_k):
     """
     Function that recover Green function from pole representation
@@ -137,8 +147,9 @@ class SE_AMI:
         self.device = device
         self.device = device
         self.N_GF = 2 * self.order - 1
+        self.graph_type = 1
         self.R0, self.prefactor = gr.get_R0_prefactor_specific(
-            self.path_to_graph, ord=self.order, group=self.group, num=self.num)
+            self.path_to_graph, ord=self.order, group=self.group, num=self.num, graph_type=self.graph_type)
         self.kx_mesh, self.ky_mesh = self._get_ind_kx_ky_mesh(self.order, self.L)
 
     def _get_ind_kx_ky_mesh(self, order, L):
@@ -207,7 +218,7 @@ class SE_AMI:
                 energy_list[i, :] = get_energy_dispersion_AMI(k_mesh[i_ext, 0, :, i], k_mesh[i_ext, 1, :, i])
             sigma[i_ext, :] = ami.get_sigma_torchami_from_dispersion(
                 iw, self.beta, energy_list, self.R0, self.prefactor,
-                False, 0, self.device) / (self.L ** (2 * self.order))
+                False, 0, self.device, self.graph_type) / (self.L ** (2 * self.order))
         return sigma
 
     def get_SE_AMI_from_poles(self, iw: np.array, k_mesh: np.array, poles_weights_kx_ky: pd.DataFrame, poles_locs: list):
@@ -225,8 +236,127 @@ class SE_AMI:
         for i_ext in range(k_mesh.shape[0]):
             sigma[i_ext, :] = ami.get_sigma_torchami_from_poles(
                 iw, self.beta, k_mesh[i_ext], poles_weights_kx_ky, poles_locs, self.R0, self.prefactor,
-                False, 0, self.device) / (self.L ** (2 * self.order))
+                False, 0, self.device, self.graph_type) / (self.L ** (2 * self.order))
         return sigma
+
+class CHI_AMI:
+    """
+    Class that find SE for certain type of diagram that represented by ord group and number and has L*L
+    2d grid for every GF
+    """
+    def __init__(self, beta, L, order, group, num, path_to_graph, device):
+        """
+        :param beta: inverse temperature
+        :param L: kx*ky grid size in one direction, whole grid L**2
+        :param ord: order of SE diagram
+        :param group: group of SE diagram
+        :param num: num of SE diagram
+        :param path_to_graph: path to the diagram
+        :param device: torch device cuda or cpu
+        """
+        self.beta = beta
+        self.L = L
+        self.order = order
+        self.group = group
+        self.num = num
+        self.path_to_graph = path_to_graph
+        self.device = device
+        self.device = device
+        self.N_GF = 2 * self.order + 2
+        self.N_ind = self.order + 1
+        self.graph_type = 2
+        self.R0, self.prefactor = gr.get_R0_prefactor_specific(
+            self.path_to_graph, ord=self.order, group=self.group, num=self.num, graph_type=self.graph_type)
+        self.kx_mesh, self.ky_mesh = self._get_ind_kx_ky_mesh(self.order, self.L)
+
+    def _get_ind_kx_ky_mesh(self, order, L):
+        """
+        Function to find kx * ky grid for n = ord number of internal momenta
+        :param order: order of SE
+        :param L: kx*ky grid size in one direction, whole grid L**2
+        :return: kx and ky mesh both have shape (L**(2*ord), ord)
+        """
+        kx_ind = np.zeros((self.N_ind, L ** 2))
+        ky_ind = np.zeros((self.N_ind, L ** 2))
+        for i in range(self.N_ind):
+            cur_x = np.linspace(0, 2 * np.pi, L)
+            cur_y = np.linspace(0, 2 * np.pi, L)
+            cur_x, cur_y = np.meshgrid(cur_x, cur_y)
+            cur_x, cur_y = np.ravel(cur_x), np.ravel(cur_y)
+            kx_ind[i, :] = cur_x
+            ky_ind[i, :] = cur_y
+
+        kx_mesh = np.meshgrid(*kx_ind)
+        kx_mesh = list(kx_mesh)
+        for i in range(len(kx_mesh)):
+            kx_mesh[i] = np.ravel(kx_mesh[i])
+
+        ky_mesh = np.meshgrid(*ky_ind)
+        ky_mesh = list(ky_mesh)
+        for i in range(len(ky_mesh)):
+            ky_mesh[i] = np.ravel(ky_mesh[i])
+        return kx_mesh, ky_mesh
+
+    def get_k_mesh(self, kexx: np.array, kexy: np.array):
+        """
+        Function that takes external kx, ky grid and calculates every GF kx ky mesh depending on topology of diagram
+        :param kexx: external kx should be same length as kexy
+        :param kexy: external ky should be same length as kexx
+        :return: k mesh
+        """
+        kx_mesh, ky_mesh = self.kx_mesh.copy(), self.ky_mesh.copy()
+
+        k_mesh = np.zeros((len(kexx), 2, self.N_GF, self.L**(2 * self.N_ind)))
+        for ind, (kexx_, kexy_) in enumerate(zip(kexx, kexy)):
+            for idx, v in enumerate(self.R0):
+                currx = 0
+                curry = 0
+                for a, kx, ky in zip(v.alpha_, kx_mesh + [kexx_], ky_mesh + [kexy_]):
+                    if a == 0:
+                        continue
+                    currx += a * kx
+                    curry += a * ky
+                i = list(v.eps_).index(1)
+                k_mesh[ind, 0, i, :] = currx % (2*np.pi)
+                k_mesh[ind, 1, i, :] = curry % (2*np.pi)
+        return k_mesh.transpose((0, 1, 3, 2))
+
+    def get_SE_AMI_from_dispersion(self, iw, k_mesh):
+        """
+        Function that calculates energy dispersions for k_mesh and uses them to find SE sigma
+        :param iw: matsubara frequencies
+        :param k_mesh: k_mesh for every k dependence for certain topology of diagram
+        :return: SE sigma for matsubara frequencies and external momenta size of length of kext * length of matsubara
+        """
+        energy_list = np.zeros((self.N_GF, self.L**(2 * self.N_ind)))
+        energy_list_full = np.zeros((k_mesh.shape[0], self.N_GF, self.L ** (2 * self.N_ind)))
+        sigma = np.zeros((k_mesh.shape[0], iw.shape[0]), dtype=complex)
+        for i_ext in range(k_mesh.shape[0]):
+            for i in range(self.N_GF):
+                energy_list[i, :] = get_energy_dispersion_AMI(k_mesh[i_ext, 0, :, i], k_mesh[i_ext, 1, :, i])
+            sigma[i_ext, :] = ami.get_sigma_torchami_from_dispersion(
+                iw, self.beta, energy_list, self.R0, self.prefactor,
+                False, 0, self.device, self.graph_type) / (self.L ** (2 * self.N_ind))
+        return sigma
+    def get_SE_AMI_from_poles(self, iw: np.array, k_mesh: np.array, poles_weights_kx_ky: pd.DataFrame, poles_locs: list):
+        """
+        Function that uses k_mesh and poles weight and locations to calculate SE sigma
+        :param iw: matsubara frequencies
+        :param k_mesh: k mesh of momenta for every topology of diagram
+        :param poles_weights_kx_ky: table for every choice of kx, ky and number of DLR pole representation,
+        that equals to number of GF in the diagram
+        :param poles_locs: list for every choice of number of DLR pole representation,
+        equals to number of GF in the diagram
+        :return: SE sigma for matsubara frequencies and external momenta size of length of kext * length of matsubara
+        """
+        sigma = np.zeros((k_mesh.shape[0], iw.shape[0]), dtype=complex)
+        for i_ext in range(k_mesh.shape[0]):
+            sigma[i_ext, :] = ami.get_sigma_torchami_from_poles(
+                iw, self.beta, k_mesh[i_ext], poles_weights_kx_ky, poles_locs, self.R0, self.prefactor,
+                False, 0, self.device, self.graph_type) / (self.L ** (2 * self.N_ind))
+        return sigma
+
+
 
 class multiple_DLR:
     """

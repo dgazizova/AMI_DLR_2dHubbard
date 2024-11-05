@@ -55,7 +55,7 @@ poles_weights_kx_ky = pd.DataFrame({
     'kx': kx_df,
     'ky': ky_df,
     'indx': ind,
-    'polls': poles_w
+    'poles': poles_w
 })
 
 

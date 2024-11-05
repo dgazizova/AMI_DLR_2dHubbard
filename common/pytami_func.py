@@ -31,7 +31,7 @@ def torch_energy_tensors_kx_ky_poles(poles_locs, usedevice):
     e_tensor = torch.cartesian_prod(*poles_locs_t)
     return e_tensor
 
-def get_sigma_torchami_from_dispersion(wn, beta, energy_list, R0, pref_in, rfswitch, gamma, device):
+def get_sigma_torchami_from_dispersion(wn, beta, energy_list, R0, pref_in, rfswitch, gamma, device, graph_type):
     ami = pytami.TamiBase(device)
     fbatchsize = len(wn)
     order = len(R0[0].alpha_) - 1
@@ -49,7 +49,14 @@ def get_sigma_torchami_from_dispersion(wn, beta, energy_list, R0, pref_in, rfswi
     # Integration/Evaluation parameters
     E_REG = 0  # numerical regulator for small energies.  If inf/nan results try E_REG=1e-8
     N_INT = int(order)  # number of matsubara sums to perform
-    test_amiparms = pytami.TamiBase.ami_parms(N_INT, E_REG)
+    if graph_type == 1:
+        type_ami = pytami.TamiBase.Sigma
+    elif graph_type == 2:
+        type_ami = pytami.TamiBase.Pi_phuu
+    else:
+        raise ValueError('graph_type must be 1 or 2')
+
+    test_amiparms = pytami.TamiBase.ami_parms(N_INT, E_REG, type_ami)
     ami.construct(N_INT, R0, ftout)
 
     energy = torch_energy_prefactor_tensors_kx_ky(energy_list, ami.getDevice())
@@ -61,7 +68,8 @@ def get_sigma_torchami_from_dispersion(wn, beta, energy_list, R0, pref_in, rfswi
 
 
 
-def get_sigma_torchami_from_poles(wn, beta, k_mesh, poles_weights, poles_locs, R0, pref_in, rfswitch, gamma, device):
+def get_sigma_torchami_from_poles(wn, beta, k_mesh, poles_weights, poles_locs, R0, pref_in, rfswitch, gamma, device,
+                                  graph_type):
     ami = pytami.TamiBase(device)
     fbatchsize = len(wn)
     order = len(R0[0].alpha_) - 1
@@ -77,7 +85,14 @@ def get_sigma_torchami_from_poles(wn, beta, k_mesh, poles_weights, poles_locs, R
     # Integration/Evaluation parameters
     E_REG = 0  # numberical regulator for small energies.  If inf/nan results try E_REG=1e-8
     N_INT = int(order)  # number of matsubara sums to perform
-    test_amiparms = pytami.TamiBase.ami_parms(N_INT, E_REG)  # SHOULD BE (0, 0) ?
+    if graph_type == 1:
+        type_ami = pytami.TamiBase.Sigma
+    elif graph_type == 2:
+        type_ami = pytami.TamiBase.Pi_phuu
+    else:
+        raise ValueError('graph_type must be 1 or 2')
+
+    test_amiparms = pytami.TamiBase.ami_parms(N_INT, E_REG, type_ami)  # SHOULD BE (0, 0) ?
     ftout = pytami.TamiBase.ft_terms()
     ami.construct(N_INT, R0, ftout)
 

@@ -39,8 +39,15 @@ def get_R0_prefactor_dict_ord(path_to_graph, orders: list):
 
     return R0_dict, prefactor_dict
 
-def get_R0_prefactor_specific(path_to_graph, ord, group, num):
-    graph_type: pytami.TamiBase.graph_type = pytami.TamiBase.Sigma
+def get_R0_prefactor_specific(path_to_graph, ord, group, num, graph_type):
+    if graph_type == 1:
+        type_ami = pytami.TamiBase.Sigma
+    elif graph_type == 2:
+        type_ami = pytami.TamiBase.Pi_phuu
+    else:
+        raise ValueError('graph_type must be 1 or 2')
+
+    graph_type: pytami.TamiBase.graph_type = type_ami
     seed: int = 0
 
     graph: pytami.TamiGraph = pytami.TamiGraph(graph_type, seed)
