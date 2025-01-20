@@ -12,9 +12,9 @@ ord, group, num = 2, 0, 0
 beta = 5
 
 # create external k mesh
-N = 21
-kexx, kexy = get_k_ext_cut(N)
-
+# N = 21
+# kexx, kexy = get_k_ext_cut(N)
+kexx, kexy = [np.pi], [np.pi]
 # calculate SE
 SE = SE_AMI(beta, L, ord, group, num, os.getenv('GRAPH_PATH_calc'), torch.device('cuda'))
 iw = matsubara("F", np.arange(0, 10), beta=beta)

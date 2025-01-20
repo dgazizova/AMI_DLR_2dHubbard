@@ -3,6 +3,8 @@ import pathlib
 from collections import defaultdict
 from dotenv import load_dotenv
 import os
+from io import StringIO
+from wurlitzer import pipes, STDOUT
 # Load environment variables from .env file
 load_dotenv()
 sys.path.append(str(pathlib.Path(__file__).parent.joinpath(os.getenv('PYTAMI_PATH')).resolve()))
@@ -62,7 +64,28 @@ def get_R0_prefactor_specific(path_to_graph, ord, group, num, graph_type):
     prefactor: float = graph.trojan_get_prefactor(diagram, ord)
     R0: pytami.TamiBase.g_prod_t = pytami.TamiBase.g_prod_t()
     graph.trojan_graph_to_R0(diagram, R0)
+    graph.reset_epsilons(R0)
     return R0, prefactor
+
+def get_edge_info(path_to_graph, ord, group, num):
+    graph_type: pytami.TamiBase.graph_type = pytami.TamiBase.Pi_phuu
+    seed: int = 0
+
+    graph: pytami.TamiGraph = pytami.TamiGraph(graph_type, seed)
+
+    folder: str = path_to_graph # specify folder with graphs, path should be relative
+    ggm: pytami.TamiGraph.gg_matrix_t = pytami.TamiGraph.gg_matrix_t()
+    graph.read_ggmp(folder, ggm, ord, ord)
+    graph.ggm_label(ggm, 0)
+
+    gg: pytami.TamiGraph.graph_group = ggm[ord][group].graph_vec
+    diagram: pytami.TamiGraph.trojan_graph = pytami.TamiGraph.trojan_graph(gg, num)  # this is ugly because of the boost graph library objects not being visible to python
+    out = StringIO()
+    with pipes(stdout=out, stderr=STDOUT):
+        graph.trojan_print_all_edge_info(diagram)
+    stdout = out.getvalue()
+    return stdout
+
 
 def print_eps_alpha_dict(R0_dict):
     for ord in R0_dict.keys():

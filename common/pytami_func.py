@@ -31,7 +31,7 @@ def torch_energy_tensors_kx_ky_poles(poles_locs, usedevice):
     e_tensor = torch.cartesian_prod(*poles_locs_t)
     return e_tensor
 
-def get_sigma_torchami_from_dispersion(wn, beta, energy_list, R0, pref_in, rfswitch, gamma, device, graph_type):
+def get_sigma_torchami_from_dispersion(wn, beta, energy_list, R0, pref_in, rfswitch, gamma, device, graph_type, vk=np.array([1])):
     ami = pytami.TamiBase(device)
     fbatchsize = len(wn)
     order = len(R0[0].alpha_) - 1
@@ -47,7 +47,7 @@ def get_sigma_torchami_from_dispersion(wn, beta, energy_list, R0, pref_in, rfswi
     ftout = pytami.TamiBase.ft_terms()
 
     # Integration/Evaluation parameters
-    E_REG = 0  # numerical regulator for small energies.  If inf/nan results try E_REG=1e-8
+    E_REG = 1e-8  # numerical regulator for small energies.  If inf/nan results try E_REG=1e-8
     N_INT = int(order)  # number of matsubara sums to perform
     if graph_type == 1:
         type_ami = pytami.TamiBase.Sigma
@@ -62,6 +62,8 @@ def get_sigma_torchami_from_dispersion(wn, beta, energy_list, R0, pref_in, rfswi
     energy = torch_energy_prefactor_tensors_kx_ky(energy_list, ami.getDevice())
 
     external = pytami.TamiBase.ami_vars(energy, frequency, beta)
+    # vk = torch.tensor(vk[:, np.newaxis].T, device=device)
+    # vk = vk.repeat(len(frequency), 1)
     calc_res = ami.evaluate(test_amiparms, ftout, external) * pref_in
     total_res = calc_res.nansum(dim=1, keepdim=False)
     return total_res.detach().cpu().numpy()

@@ -244,7 +244,7 @@ class CHI_AMI:
     Class that find SE for certain type of diagram that represented by ord group and number and has L*L
     2d grid for every GF
     """
-    def __init__(self, beta, L, order, group, num, path_to_graph, device):
+    def __init__(self, beta, L, order, group, num, path_to_graph, device, random_sample=False, N_integr=1e+4, N_batch=1):
         """
         :param beta: inverse temperature
         :param L: kx*ky grid size in one direction, whole grid L**2
@@ -267,12 +267,17 @@ class CHI_AMI:
         self.graph_type = 2
         self.R0, self.prefactor = gr.get_R0_prefactor_specific(
             self.path_to_graph, ord=self.order, group=self.group, num=self.num, graph_type=self.graph_type)
-        self.kx_mesh, self.ky_mesh = self._get_ind_kx_ky_mesh(self.order, self.L)
+        self.kx_mesh, self.ky_mesh = self._get_ind_kx_ky_mesh(self.L)
+        if random_sample:
+            self.N_integr = int(N_integr)
+            self.N_batch = int(N_batch)
+        else:
+            self.kx_mesh, self.ky_mesh = self._get_ind_kx_ky_mesh(self.L)
 
-    def _get_ind_kx_ky_mesh(self, order, L):
+
+    def _get_ind_kx_ky_mesh(self, L):
         """
         Function to find kx * ky grid for n = ord number of internal momenta
-        :param order: order of SE
         :param L: kx*ky grid size in one direction, whole grid L**2
         :return: kx and ky mesh both have shape (L**(2*ord), ord)
         """
@@ -321,15 +326,23 @@ class CHI_AMI:
                 k_mesh[ind, 1, i, :] = curry % (2*np.pi)
         return k_mesh.transpose((0, 1, 3, 2))
 
-    def get_SE_AMI_from_dispersion(self, iw, k_mesh):
+    def get_vk(self, vk_inds, k_mesh):
+        vk = np.ones((k_mesh.shape[0], k_mesh.shape[2]))
+        for ext in range(k_mesh.shape[0]):
+            for indx in vk_inds:
+                vk[ext, :] *= np.sin(k_mesh[ext, 0, :, indx])
+        return vk
+
+    def get_SE_AMI_from_dispersion(self, iw, k_mesh, vk=None):
         """
         Function that calculates energy dispersions for k_mesh and uses them to find SE sigma
         :param iw: matsubara frequencies
         :param k_mesh: k_mesh for every k dependence for certain topology of diagram
         :return: SE sigma for matsubara frequencies and external momenta size of length of kext * length of matsubara
         """
+        # if vk == None:
+        #     vk = np.ones((k_mesh.shape[0], k_mesh.shape[2]))
         energy_list = np.zeros((self.N_GF, self.L**(2 * self.N_ind)))
-        energy_list_full = np.zeros((k_mesh.shape[0], self.N_GF, self.L ** (2 * self.N_ind)))
         sigma = np.zeros((k_mesh.shape[0], iw.shape[0]), dtype=complex)
         for i_ext in range(k_mesh.shape[0]):
             for i in range(self.N_GF):
@@ -338,6 +351,7 @@ class CHI_AMI:
                 iw, self.beta, energy_list, self.R0, self.prefactor,
                 False, 0, self.device, self.graph_type) / (self.L ** (2 * self.N_ind))
         return sigma
+
     def get_SE_AMI_from_poles(self, iw: np.array, k_mesh: np.array, poles_weights_kx_ky: pd.DataFrame, poles_locs: list):
         """
         Function that uses k_mesh and poles weight and locations to calculate SE sigma
@@ -356,7 +370,63 @@ class CHI_AMI:
                 False, 0, self.device, self.graph_type) / (self.L ** (2 * self.N_ind))
         return sigma
 
+    def _get_ind_kx_ky_mesh_random(self):
+        """
+        Function to find kx * ky grid for n = ord number of internal momenta
+        :param L: kx*ky grid size in one direction, whole grid L**2
+        :return: kx and ky mesh both have shape (L**(2*ord), ord)
+        """
+        kx_mesh = [np.random.uniform(low=0.0, high=2 * np.pi, size=self.N_integr) for _ in range(self.N_ind)]
+        ky_mesh = [np.random.uniform(low=0.0, high=2 * np.pi, size=self.N_integr) for _ in range(self.N_ind)]
+        return kx_mesh, ky_mesh
 
+    def _get_k_mesh_random(self, kexx: np.array, kexy: np.array):
+        """
+        Function that takes external kx, ky grid and calculates every GF kx ky mesh depending on topology of diagram
+        :param kexx: external kx should be same length as kexy
+        :param kexy: external ky should be same length as kexx
+        :return: k mesh
+        """
+        kx_mesh, ky_mesh = self._get_ind_kx_ky_mesh_random()
+        k_mesh = np.zeros((len(kexx), 2, self.N_GF, self.N_integr))
+        for ind, (kexx_, kexy_) in enumerate(zip(kexx, kexy)):
+            for idx, v in enumerate(self.R0):
+                currx = 0
+                curry = 0
+                for a, kx, ky in zip(v.alpha_, kx_mesh + [kexx_], ky_mesh + [kexy_]):
+                    if a == 0:
+                        continue
+                    currx += a * kx
+                    curry += a * ky
+                i = list(v.eps_).index(1)
+                k_mesh[ind, 0, i, :] = currx % (2*np.pi)
+                k_mesh[ind, 1, i, :] = curry % (2*np.pi)
+        return k_mesh.transpose((0, 1, 3, 2))
+
+    def get_SE_AMI_from_dispersion_random(self, iw, kexx: np.array, kexy: np.array):
+        """
+        Function that calculates energy dispersions for k_mesh and uses them to find SE sigma
+        :param iw: matsubara frequencies
+        :param k_mesh: k_mesh for every k dependence for certain topology of diagram
+        :return: SE sigma for matsubara frequencies and external momenta size of length of kext * length of matsubara
+        """
+        k_mesh = self._get_k_mesh_random(kexx, kexy)
+        energy_list = np.zeros((self.N_GF, self.N_integr))
+        sigma = np.zeros((k_mesh.shape[0], iw.shape[0]), dtype=complex)
+        for i_ext in range(k_mesh.shape[0]):
+            for i in range(self.N_GF):
+                energy_list[i, :] = get_energy_dispersion_AMI(k_mesh[i_ext, 0, :, i], k_mesh[i_ext, 1, :, i])
+            sigma[i_ext, :] = ami.get_sigma_torchami_from_dispersion(
+                iw, self.beta, energy_list, self.R0, self.prefactor,
+                False, 0, self.device, self.graph_type) / self.N_integr
+        return sigma
+
+    def batch_calc_random(self, iw, kexx, kexy):
+        chi = self.get_SE_AMI_from_dispersion_random(iw, kexx, kexy)
+        for i in range(1, self.N_batch):
+            chi_loc = self.get_SE_AMI_from_dispersion_random(iw, kexx, kexy)
+            chi = np.mean(np.array([chi, chi_loc]), axis=0)
+        return chi
 
 class multiple_DLR:
     """
